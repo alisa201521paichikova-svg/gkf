@@ -38,5 +38,10 @@ def on_move(data):
             
         emit('update', {"players": players}, broadcast=True)
 
+import os
+
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=8000)
+    # Обязательно используем динамический порт от Render
+    port = int(os.environ.get("PORT", 5000))
+    # Добавляем allow_unsafe_werkzeug=True, чтобы убрать ошибку
+    socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
