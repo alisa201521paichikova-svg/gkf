@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Bnyk Messenger | Auth</title>
+    <style>
+        body { background: #0e1621; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { background: #17212b; padding: 30px; border-radius: 12px; width: 320px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #242f3d; border: 1px solid #242f3d; color: white; border-radius: 8px; box-sizing: border-box; outline: none; }
+        button { width: 100%; padding: 12px; background: #2b5278; border: none; color: white; cursor: pointer; border-radius: 8px; margin-top: 15px; font-weight: bold; }
+        #captcha-container { display: none; margin-top: 10px; background: #242f3d; padding: 10px; border-radius: 8px; }
+        #captcha-img { cursor: pointer; width: 100%; border-radius: 5px; }
+        .switch { color: #4da9ff; cursor: pointer; margin-top: 20px; display: block; text-decoration: underline; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2 id="title">Вход</h2>
+        <input type="text" id="user" placeholder="Никнейм">
+        <input type="password" id="pass" placeholder="Пароль">
+        <div id="captcha-container">
+            <img src="/api/captcha" id="captcha-img" onclick="refreshCaptcha()">
+            <input type="text" id="captcha-input" placeholder="Код с картинки">
+        </div>
+        <button onclick="auth()" id="btn">Войти</button>
+        <span class="switch" onclick="toggle()" id="toggleBtn">Нет аккаунта? Регистрация</span>
+    </div>
+
+    <script>
+        let mode = 'login';
+        // Тихая проверка: ставим куку
+        document.cookie = "human_token=bnyk_verified_2026; path=/; max-age=3600";
+
+        function refreshCaptcha() { document.getElementById('captcha-img').src = '/api/captcha?t=' + Date.now(); }
+
+        function toggle() {
+            mode = (mode === 'login') ? 'reg' : 'login';
+            document.getElementById('title').innerText = mode === 'login' ? 'Вход' : 'Регистрация';
+            document.getElementById('btn').innerText = mode === 'login' ? 'Войти' : 'Создать аккаунт';
+            document.getElementById('captcha-container').style.display = mode === 'reg' ? 'block' : 'none';
+            if(mode === 'reg') refreshCaptcha();
+        }
+
+        async function auth() {
+            const user = document.getElementById('user').value.trim();
+            const pass = document.getElementById('pass').value.trim();
+            const captcha = document.getElementById('captcha-input').value.trim();
+            const url = mode === 'login' ? '/api/login' : '/api/register';
+
+            const r = await fetch(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ user, pass, captcha, fp: navigator.userAgent })
+            });
+            const res = await r.json();
+            if(res.status === 'ok') {
+                if(mode === 'reg') { alert("Успех! Входи."); toggle(); }
+                else window.location.href = '/';
+            } else { alert(res.message); }
+        }
+    </script>
+</body>
+</html>

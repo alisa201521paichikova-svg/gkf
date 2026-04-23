@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BNYK 3D SNAKE PRO</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>body { margin: 0; overflow: hidden; background: #000; } #ui { position: fixed; top: 10px; left: 10px; color: #00ff41; font-family: monospace; }</style>
+</head>
+<body>
+<div id="ui">STAMINA: [SPACE] TO BOOST</div>
+<script>
+    const socket = io();
+    let myId, players = {}, playerSkins = {}; 
+    let foodMesh, myLength = 3;
+    let myPos = { x: 0, z: 0 };
+    let velocity = { x: 0, z: 0 };
+    let history = []; // История позиций для хвоста
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0x404040));
+    const light = new THREE.PointLight(0xffffff, 1, 100);
+    light.position.set(0, 20, 0);
+    scene.add(light);
+
+    // ОГРОМНАЯ КАРТА
+    const grid = new THREE.GridHelper(100, 50, 0x00ff41, 0x111111);
+    scene.add(grid);
+
+    socket.emit('join', {});
+    socket.on('init', data => { myId = data.id; spawnFood(data.food); });
+    socket.on('update', data => { players = data.players; if(players[myId]) myLength = players[myId].length; });
+    socket.on('food_update', data => spawnFood(data));
+
+    function spawnFood(pos) {
+        if (foodMesh) scene.remove(foodMesh);
+        foodMesh = new THREE.Mesh(new THREE.SphereGeometry(0.7), new THREE.MeshPhongMaterial({ color: 0xff0000 }));
+        foodMesh.position.set(pos.x, 0.5, pos.z);
+        scene.add(foodMesh);
+    }
+
+    const keys = {};
+    window.onkeydown = e => keys[e.key.toLowerCase()] = true;
+    window.onkeyup = e => keys[e.key.toLowerCase()] = false;
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // ЛОГИКА БУСТА (СТАМИНА)
+        let speed = 0.2;
+        if (keys[' '] && myLength > 2) {
+            speed = 0.5;
+            // Уменьшаем хвост при бусте (раз в 60 кадров примерно)
+            if (Math.random() > 0.98) myLength -= 0.1; 
+        }
+
+        if (keys['w'] || keys['ц']) velocity.z = -speed;
+        else if (keys['s'] || keys['ы']) velocity.z = speed;
+        else velocity.z *= 0.8;
+
+        if (keys['a'] || keys['ф']) velocity.x = -speed;
+        else if (keys['d'] || keys['в']) velocity.x = speed;
+        else velocity.x *= 0.8;
+
+        myPos.x += velocity.x;
+        myPos.z += velocity.z;
+
+        // Ограничение карты
+        myPos.x = Math.max(-50, Math.min(50, myPos.x));
+        myPos.z = Math.max(-50, Math.min(50, myPos.z));
+
+        // Запись истории для хвоста
+        history.unshift({x: myPos.x, z: myPos.z});
+        if (history.length > 100) history.pop();
+
+        if (myId) {
+            socket.emit('move', {x: myPos.x, z: myPos.z, length: Math.floor(myLength)});
+            camera.position.set(myPos.x, 20, myPos.z + 20);
+            camera.lookAt(myPos.x, 0, myPos.z);
+        }
+
+        // ОТРИСОВКА ВСЕХ ИГРОКОВ И ИХ ХВОСТОВ
+        for (let id in players) {
+            if (!playerSkins[id]) playerSkins[id] = [];
+            
+            let len = players[id].length;
+            // Добавляем сегменты если их мало
+            while(playerSkins[id].length < len) {
+                let seg = new THREE.Mesh(new THREE.SphereGeometry(0.6), new THREE.MeshPhongMaterial({ color: players[id].color }));
+                scene.add(seg);
+                playerSkins[id].push(seg);
+            }
+            // Убираем если много
+            while(playerSkins[id].length > len) {
+                scene.remove(playerSkins[id].pop());
+            }
+
+            // Двигаем голову и хвост (очень упрощенно для теста)
+            playerSkins[id].forEach((seg, i) => {
+                if (id === myId) {
+                    let pos = history[i * 3] || myPos; // Отступ хвоста
+                    seg.position.set(pos.x, 0.5, pos.z);
+                } else {
+                    // Другие игроки (плавность хвоста других сложнее, пока просто кучкой)
+                    seg.position.set(players[id].x, 0.5, players[id].z);
+                }
+            });
+        }
+
+        renderer.render(scene, camera);
+    }
+    animate();
+</script>
+</body>
+</html>
